@@ -43,7 +43,7 @@ int main(int argc, char** argv)
 
         spiderTask(url, lock, threadPool, connectDb);
         // таймаут каждого потока, после чего он считается "зависшим"
-        threadPool.setTimeout(std::chrono::seconds(9));
+        threadPool.setTimeout(std::chrono::seconds(60));
         threadPool.wait();
     }
     catch (const std::exception& err)
