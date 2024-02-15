@@ -20,29 +20,22 @@ std::string url_decode(const std::string& encoded)
 	return res;
 }
 
-std::string url_encode(const std::string& decoted)
+std::string url_encode(const std::string& decoded)
 {
-	std::string new_str = "";
-	char c;
-	int ic;
-	const char* chars = decoted.c_str();
-	char bufHex[10];
-	int len = strlen(chars);
-
-	for (int i = 0; i < len; i++) {
-		c = chars[i];
-		ic = c;
-		// uncomment this if you want to encode spaces with +
-		/*if (c==' ') new_str += '+';
-		else */if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') new_str += c;
-		else {
-			sprintf(bufHex, "%X", c);
-			if (ic < 16)
-				new_str += "%0";
-			else
-				new_str += "%";
-			new_str += bufHex;
+	std::ostringstream escaped;
+	escaped.fill('0');
+	escaped << std::hex;
+	for (auto i = decoded.begin(); i != decoded.end(); ++i) {
+		std::string::value_type c = (*i);
+		// Keep alphanumeric and other accepted characters intact
+		if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || c == ':' || c == '/') {
+			escaped << c;
+			continue;
 		}
+		// Any other characters are percent-encoded
+		escaped << std::uppercase;
+		escaped << '%' << std::setw(2) << int((unsigned char)c);
+		escaped << std::nouppercase;
 	}
-	return new_str;
+	return escaped.str();
 }
