@@ -7,6 +7,7 @@ set(HEADERS ${PROJECT_SOURCE_DIR}/AsyncServer/Server.h
 			${PROJECT_SOURCE_DIR}/Clientdb/Clientdb.h
 			${PROJECT_SOURCE_DIR}/Types.h
 			${PROJECT_SOURCE_DIR}/SecondFunk/SecondaryFunction.h
+			${PROJECT_SOURCE_DIR}/UrlEncodeDecode/UrlEncodeDecode.h
 )
 set(SOURCES main.cpp
 			${PROJECT_SOURCE_DIR}/AsyncServer/Server.cpp
@@ -14,12 +15,14 @@ set(SOURCES main.cpp
 			${PROJECT_SOURCE_DIR}/ConfigFile/ConfigFile.cpp
 			${PROJECT_SOURCE_DIR}/Clientdb/Clientdb.cpp
 			${PROJECT_SOURCE_DIR}/SecondFunk/SecondaryFunction.cpp
+			${PROJECT_SOURCE_DIR}/UrlEncodeDecode/UrlEncodeDecode.cpp
 )
 # C/C++: доп. каталоги включаемых файлов (#include)
 include_directories(${PROJECT_SOURCE_DIR}/AsyncServer
 					${PROJECT_SOURCE_DIR}/ConfigFile
 					${PROJECT_SOURCE_DIR}/Clientdb
 					${PROJECT_SOURCE_DIR}/SecondFunk
+					${PROJECT_SOURCE_DIR}/UrlEncodeDecode
 )
 
 # Boost:
