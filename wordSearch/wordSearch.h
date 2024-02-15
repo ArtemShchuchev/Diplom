@@ -5,6 +5,7 @@
 #include <boost/locale.hpp> // перед "SecondaryFunction.h"
 #include "SecondaryFunction.h"
 #include "../Types.h"
+#include "UrlEncodeDecode.h"
 
 using Link = struct {
 	std::string link_str;

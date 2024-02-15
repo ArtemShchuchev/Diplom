@@ -29,7 +29,10 @@ std::pair<WordMap, LinkList> WordSearch::getWordLink(std::wstring page, unsigned
     for (auto it(it_start); it != it_end; ++it)
     {
         std::wstring link_ws(*it);
-        std::string link_str(wideUtf2utf8(link_ws));
+        std::string link_str(
+            url_decode(
+                wideUtf2utf8(
+                    link_ws)));
         links.push_back( { link_str, recLevel } );
     }
 
