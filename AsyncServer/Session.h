@@ -2,10 +2,12 @@
 
 #include <iostream>
 #include <boost/beast.hpp>
+#include <boost/url.hpp>
 #include <boost/asio.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include "Clientdb.h"
 #include "SecondaryFunction.h"
+#include "UrlEncodeDecode.h"
 
 namespace beast = boost::beast;     // from <boost/beast.hpp>
 namespace http = beast::http;       // from <boost/beast/http.hpp>
@@ -29,7 +31,6 @@ private:
     void processingRequest();
     void createResponseGet();
     void createResponsePost();
-    std::string url_decode(const std::string& encoded);
     void writeResponse();
     void checkDeadline();
 	

@@ -227,26 +227,6 @@ void Session::createResponsePost()
 	}
 }
 
-std::string Session::url_decode(const std::string& encoded)
-{
-	std::string res;
-	std::istringstream iss(encoded);
-	char ch;
-
-	while (iss.get(ch)) {
-		if (ch == '%') {
-			int hex;
-			iss >> std::hex >> hex;
-			res += static_cast<char>(hex);
-		}
-		else {
-			res += ch;
-		}
-	}
-
-	return res;
-}
-
 void Session::writeResponse()
 {
 	auto self(shared_from_this());
