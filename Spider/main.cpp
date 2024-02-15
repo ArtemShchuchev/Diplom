@@ -7,6 +7,7 @@
 #include "SecondaryFunction.h"
 #include "../Types.h"
 
+
 struct Lock {
     std::mutex console;
     std::mutex parse;
@@ -109,16 +110,18 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
                     idWordAm_vec idWordAm(db.addWords(std::move(wordlinks.first)));
                     db.addLinkWords(idLink, idWordAm);
                 }
-                catch (const pqxx::broken_connection& err)
+                catch (pqxx::broken_connection& err)
                 {
-                    std::wstring err_str(L"Ошибка подключения к PostgreSQL: " + ansi2wideUtf(err.what()));
-                    std::string str(wideUtf2utf8(err_str));
-                    throw std::runtime_error(str);
+                    std::wstring err_str(L"Ошибка подключения к PostgreSQL: "
+                        + ansi2wideUtf(err.what()));
+
+                    std::rethrow_exception(
+                        std::make_exception_ptr(
+                            std::runtime_error(wideUtf2utf8(err_str))));
                 }
-                catch (const std::exception& err)
+                catch (const std::exception&)
                 {
-                    std::string err_str("Ошибка PostgreSQL: ");
-                    throw std::runtime_error(err_str + err.what());
+                    std::rethrow_exception(std::current_exception());
                 }
             }
         }

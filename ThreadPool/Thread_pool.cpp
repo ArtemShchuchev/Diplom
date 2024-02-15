@@ -30,9 +30,9 @@ void Thread_pool::work(const unsigned idx)
 		{
 			task();
 		}
-		catch (const std::exception& err)
+		catch (const std::exception&)
 		{
-			throw err.what();
+			std::rethrow_exception(std::current_exception());
 		}
 		status[idx].mode = thread_mode::free;
 	}
@@ -82,5 +82,5 @@ void Thread_pool::wait()
 {
 	while (isBusy()) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
-	};
+	}
 }
