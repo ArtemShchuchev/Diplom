@@ -13,6 +13,9 @@ struct Lock {
     std::mutex parse;
     std::mutex db;
 };
+auto lock = std::make_shared<Lock>();
+Thread_pool threadPool(std::thread::hardware_concurrency());
+
 static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
     Thread_pool& threadPool, ConnectData& conData);
 
@@ -38,16 +41,14 @@ int main(int argc, char** argv)
         connectDb.username = config.getConfig<std::string>("BdConnect", "user");
         connectDb.port = config.getConfig<unsigned>("BdConnect", "port");
 
-        auto lock = std::make_shared<Lock>();
-
-        int numThr(std::thread::hardware_concurrency());
-        Thread_pool threadPool(numThr);
-        // таймаут каждого потока, после чего он считается "зависшим"
-        threadPool.setTimeout(std::chrono::seconds(60));
         spiderTask(url, lock, threadPool, connectDb);
+        // таймаут каждого потока, после чего он считается "зависшим"
+        threadPool.setTimeout(std::chrono::seconds(9));
+        threadPool.wait();
     }
     catch (const std::exception& err)
     {
+        std::lock_guard<std::mutex> lg(lock->console);
         consoleCol(col::br_red);
         std::wcerr << L"\nИсключение типа: " << typeid(err).name() << '\n';
         std::wcerr << utf82wideUtf(err.what()) << '\n';

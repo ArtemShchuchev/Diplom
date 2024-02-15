@@ -14,7 +14,7 @@ Thread_pool::Thread_pool(const unsigned numThr) : _timeout(std::chrono::seconds(
 
 Thread_pool::~Thread_pool()
 {
-	wait();	// ожидание завершения работы потоками
+	//wait();	// ожидание завершения работы потоками
 }
 
 // выбирает из очереди очередную задачу и выполняет ее
@@ -26,14 +26,7 @@ void Thread_pool::work(const unsigned idx)
 		
 		status[idx].start = std::chrono::steady_clock::now();
 		status[idx].mode = thread_mode::busy;
-		try
-		{
-			task();
-		}
-		catch (const std::exception&)
-		{
-			std::rethrow_exception(std::current_exception());
-		}
+		task();
 		status[idx].mode = thread_mode::free;
 	}
 }
