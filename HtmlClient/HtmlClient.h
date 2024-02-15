@@ -7,6 +7,7 @@
 #include <boost/regex.hpp>
 #include <boost/asio/ssl.hpp>
 #include "SecondaryFunction.h"
+#include "UrlEncodeDecode.h"
 
 namespace beast = boost::beast;     // from <boost/beast.hpp>
 namespace http = beast::http;       // from <boost/beast/http.hpp>

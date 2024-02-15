@@ -4,6 +4,7 @@ std::wstring HtmlClient::do_request(std::string urlStr)
 {
     try
     {
+        urlStr = url_encode(urlStr);
         // Парсинг строки ссылки
         boost::urls::url_view url;
         bool parseErr(true);
