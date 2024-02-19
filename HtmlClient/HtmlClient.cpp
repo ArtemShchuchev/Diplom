@@ -1,10 +1,147 @@
 ﻿#include "HtmlClient.h"
 
-std::wstring HtmlClient::do_request(std::string urlStr)
+// io_context требуется для всех операций ввода-вывода.
+net::io_context ioc;
+static std::wstring do_request(std::string urlStr);
+
+
+static std::wstring checkResult(http::response<http::dynamic_body> res)
+{
+    std::wstring ws;
+    unsigned int responseCode(res.base().result_int());
+    switch (responseCode)
+    {
+        case 301:
+        {
+            std::string url(res.base()["Location"]);
+            ////////////////////////////////////////////
+            //std::wcout << responseCode << L": Перенаправлено: " << ansi2wideUtf(url) << "\n\n";
+            ////////////////////////////////////////////
+            ws = do_request(url);
+            break;
+        }
+        case 200:
+        {
+            std::stringstream ss;
+            ss << res;
+            std::string s(ss.str());
+            ws = utf82wideUtf(s);
+            break;
+        }
+        default:
+            ////////////////////////////////////////////
+            //std::wcout << L"Unexpected HTTP status " << responseCode << "\n\n";
+            ////////////////////////////////////////////
+            break;
+    }
+
+    return ws;
+}
+
+static std::wstring httpsRequest(const tcp::resolver::results_type& sequenceEp,
+    const http::request<http::string_body>& req)
+{
+    ssl::context ctx(ssl::context::sslv23);
+    ctx.set_default_verify_paths();
+    ctx.set_options(ssl::context::default_workarounds | ssl::context::verify_none);
+
+    ssl::stream<tcp::socket> sslStream(ioc, ctx);
+    sslStream.set_verify_mode(ssl::context::verify_none);
+    sslStream.set_verify_callback([](bool, ssl::verify_context&) {return true; });
+    ////////////////////////////////////////////
+    //std::wcout << L">>> Подключение... ";
+    ////////////////////////////////////////////
+    boost::asio::connect(sslStream.lowest_layer(), sequenceEp);
+    ////////////////////////////////////////////
+    //std::wcout << L"успешно (" << sslStream.lowest_layer().remote_endpoint() << L") <<<\n";
+    //std::wcout << L">>> Рукопожатие... ";
+    ////////////////////////////////////////////
+    sslStream.handshake(ssl::stream<tcp::socket>::client);
+    ////////////////////////////////////////////
+    //std::wcout << L"<<<\n";
+    ////////////////////////////////////////////
+    sslStream.lowest_layer().set_option(tcp::no_delay(true));
+    ///////////////////////////////////////
+    //std::wcout << L">>> Отправка... ";
+    ////////////////////////////////////////////
+    int bytes_sent = http::write(sslStream, req);
+    ////////////////////////////////////////////
+    //std::wcout << bytes_sent << L" байт отправлено <<<\n";
+    ////////////////////////////////////////////
+    beast::flat_buffer buffer;
+    http::response<http::dynamic_body> res;
+    ///////////////////////////////////////
+    //std::wcout << L">>> Чтение... ";
+    ////////////////////////////////////////////
+    auto bytes_received = http::read(sslStream, buffer, res);
+    ////////////////////////////////////////////
+    //std::wcout << bytes_received << L" байт получено <<<\n";
+    ////////////////////////////////////////////
+    // Аккуратно закройте сокет
+    beast::error_code ec;
+    sslStream.shutdown(ec);
+    if (ec == ssl::error::stream_truncated)
+        ec = {};
+    sslStream.lowest_layer().shutdown(tcp::socket::shutdown_both, ec);
+    sslStream.lowest_layer().close();
+    ////////////////////////////////////////////
+    //std::wcout << ansi2wideUtf(ec.message()) << std::endl << std::endl;
+    ////////////////////////////////////////////
+    // not_connected иногда случается, так что не беспокойтесь об этом
+    if (ec && ec != beast::errc::not_connected)
+        throw beast::system_error{ ec };
+        
+    return checkResult(res);
+}
+
+static std::wstring httpRequest(const tcp::resolver::results_type& sequenceEp,
+    const http::request<http::string_body>& req)
+{
+    beast::tcp_stream stream{ ioc };
+    // Установите соединение по IP-адресу
+    ////////////////////////////////////////////
+    //std::wcout << L">>> Подключение... ";
+    ////////////////////////////////////////////
+    boost::asio::connect(stream.socket(), sequenceEp);
+    // Отправьте HTTP-запрос на удаленный хост
+    ////////////////////////////////////////////
+    //std::wcout << L"успешно (" << stream.socket().lowest_layer().remote_endpoint() << L") <<<\n";
+    //std::wcout << L">>> Отправка... ";
+    ////////////////////////////////////////////
+    int bytes_sent = http::write(stream, req);
+    ////////////////////////////////////////////
+    //std::wcout << bytes_sent << L" байт отправлено <<<\n";
+    ////////////////////////////////////////////
+    // Этот буфер используется для чтения и должен быть сохранен
+    beast::flat_buffer buffer;
+    // Объявите контейнер для хранения ответа
+    http::response<http::dynamic_body> res;
+    // Получите HTTP-ответ
+    ///////////////////////////////////////
+    //std::wcout << L">>> Чтение... ";
+    ////////////////////////////////////////////
+    int bytes_received = http::read(stream, buffer, res);
+    ////////////////////////////////////////////
+    //std::wcout << bytes_received << L" байт получено <<<\n";
+    ////////////////////////////////////////////
+    // Аккуратно закройте сокет
+    beast::error_code ec;
+    stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+    stream.socket().close();
+    ////////////////////////////////////////////
+    //std::wcout << ansi2wideUtf(ec.message()) << std::endl << std::endl;
+    ////////////////////////////////////////////
+    // not_connected иногда случается, так что не беспокойтесь об этом
+    if (ec && ec != beast::errc::not_connected)
+        throw beast::system_error{ ec };
+
+    return checkResult(res);
+}
+
+static std::wstring do_request(std::string urlStr)
 {
     try
     {
-        urlStr = url_encode(urlStr);
         // Парсинг строки ссылки
         boost::urls::url_view url;
         bool parseErr(true);
@@ -71,138 +208,6 @@ std::wstring HtmlClient::do_request(std::string urlStr)
     return L"";
 }
 
-std::wstring HtmlClient::httpsRequest(const tcp::resolver::results_type& sequenceEp,
-    const http::request<http::string_body>& req)
-{
-    ssl::context ctx(ssl::context::sslv23);
-    ctx.set_default_verify_paths();
-    ctx.set_options(ssl::context::default_workarounds | ssl::context::verify_none);
-
-    ssl::stream<tcp::socket> sslStream(ioc, ctx);
-    sslStream.set_verify_mode(ssl::context::verify_none);
-    sslStream.set_verify_callback([](bool, ssl::verify_context&) {return true; });
-    ////////////////////////////////////////////
-    //std::wcout << L">>> Подключение... ";
-    ////////////////////////////////////////////
-    boost::asio::connect(sslStream.lowest_layer(), sequenceEp);
-    ////////////////////////////////////////////
-    //std::wcout << L"успешно (" << sslStream.lowest_layer().remote_endpoint() << L") <<<\n";
-    //std::wcout << L">>> Рукопожатие... ";
-    ////////////////////////////////////////////
-    sslStream.handshake(ssl::stream<tcp::socket>::client);
-    ////////////////////////////////////////////
-    //std::wcout << L"<<<\n";
-    ////////////////////////////////////////////
-    sslStream.lowest_layer().set_option(tcp::no_delay(true));
-    ///////////////////////////////////////
-    //std::wcout << L">>> Отправка... ";
-    ////////////////////////////////////////////
-    int bytes_sent = http::write(sslStream, req);
-    ////////////////////////////////////////////
-    //std::wcout << bytes_sent << L" байт отправлено <<<\n";
-    ////////////////////////////////////////////
-    beast::flat_buffer buffer;
-    http::response<http::dynamic_body> res;
-    ///////////////////////////////////////
-    //std::wcout << L">>> Чтение... ";
-    ////////////////////////////////////////////
-    auto bytes_received = http::read(sslStream, buffer, res);
-    ////////////////////////////////////////////
-    //std::wcout << bytes_received << L" байт получено <<<\n";
-    ////////////////////////////////////////////
-    // Аккуратно закройте сокет
-    beast::error_code ec;
-    sslStream.shutdown(ec);
-    if (ec == ssl::error::stream_truncated)
-        ec = {};
-    sslStream.lowest_layer().shutdown(tcp::socket::shutdown_both, ec);
-    sslStream.lowest_layer().close();
-    ////////////////////////////////////////////
-    //std::wcout << ansi2wideUtf(ec.message()) << std::endl << std::endl;
-    ////////////////////////////////////////////
-    // not_connected иногда случается, так что не беспокойтесь об этом
-    if (ec && ec != beast::errc::not_connected)
-        throw beast::system_error{ ec };
-        
-    return checkResult(res);
-}
-
-std::wstring HtmlClient::httpRequest(const tcp::resolver::results_type& sequenceEp,
-    const http::request<http::string_body>& req)
-{
-    beast::tcp_stream stream{ ioc };
-    // Установите соединение по IP-адресу
-    ////////////////////////////////////////////
-    //std::wcout << L">>> Подключение... ";
-    ////////////////////////////////////////////
-    boost::asio::connect(stream.socket(), sequenceEp);
-    // Отправьте HTTP-запрос на удаленный хост
-    ////////////////////////////////////////////
-    //std::wcout << L"успешно (" << stream.socket().lowest_layer().remote_endpoint() << L") <<<\n";
-    //std::wcout << L">>> Отправка... ";
-    ////////////////////////////////////////////
-    int bytes_sent = http::write(stream, req);
-    ////////////////////////////////////////////
-    //std::wcout << bytes_sent << L" байт отправлено <<<\n";
-    ////////////////////////////////////////////
-    // Этот буфер используется для чтения и должен быть сохранен
-    beast::flat_buffer buffer;
-    // Объявите контейнер для хранения ответа
-    http::response<http::dynamic_body> res;
-    // Получите HTTP-ответ
-    ///////////////////////////////////////
-    //std::wcout << L">>> Чтение... ";
-    ////////////////////////////////////////////
-    int bytes_received = http::read(stream, buffer, res);
-    ////////////////////////////////////////////
-    //std::wcout << bytes_received << L" байт получено <<<\n";
-    ////////////////////////////////////////////
-    // Аккуратно закройте сокет
-    beast::error_code ec;
-    stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-    stream.socket().close();
-    ////////////////////////////////////////////
-    //std::wcout << ansi2wideUtf(ec.message()) << std::endl << std::endl;
-    ////////////////////////////////////////////
-    // not_connected иногда случается, так что не беспокойтесь об этом
-    if (ec && ec != beast::errc::not_connected)
-        throw beast::system_error{ ec };
-
-    return checkResult(res);
-}
-
-std::wstring HtmlClient::checkResult(http::response<http::dynamic_body> res)
-{
-    std::wstring ws;
-    unsigned int responseCode(res.base().result_int());
-    switch (responseCode)
-    {
-        case 301:
-        {
-            std::string url(res.base()["Location"]);
-            ////////////////////////////////////////////
-            //std::wcout << responseCode << L": Перенаправлено: " << ansi2wideUtf(url) << "\n\n";
-            ////////////////////////////////////////////
-            ws = do_request(url);
-            break;
-        }
-        case 200:
-        {
-            std::stringstream ss;
-            ss << res;
-            std::string s(ss.str());
-            ws = utf82wideUtf(s);
-            break;
-        }
-        default:
-            ////////////////////////////////////////////
-            //std::wcout << L"Unexpected HTTP status " << responseCode << "\n\n";
-            ////////////////////////////////////////////
-            break;
-    }
-
-    return ws;
-}
 
 std::wstring HtmlClient::getRequest(const std::string& urlStr)
 {
