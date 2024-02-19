@@ -28,7 +28,6 @@ private:
 
 	void createTable();
 	bool is_open();
-	void deleteLink(const int id);
 	void delFromLinkWords(const int linkId);
 	void deleteNotUseWord();
 	int createLink(const std::string& link);
@@ -38,6 +37,7 @@ public:
 	Clientdb(const ConnectData& data);
 	std::wstring dbname();
 	int addLink(const std::string& link);
+	void deleteLink(const int id);
 	int getIdLink(const std::string& link);
 	idWordAm_vec addWords(const WordMap wordAmount);
 	void addLinkWords(const int id, const idWordAm_vec& idWordAm);
