@@ -2,6 +2,7 @@
 
 std::string url_decode(const std::string& encoded)
 {
+	/*
 	std::string output, hex_str;
 	unsigned count(0);
 	for (const auto& ch : encoded) {
@@ -9,7 +10,7 @@ std::string url_decode(const std::string& encoded)
 			switch (count)
 			{
 				case 1:
-					hex_str += ch;
+					hex_str = ch;
 					[[fallthrough]];
 				case 0:
 					++count;
@@ -23,7 +24,6 @@ std::string url_decode(const std::string& encoded)
 					ss >> uint;
 					output += static_cast<unsigned char>(uint);
 					count = 0;
-					hex_str.clear();
 					break;
 				}
 				default:
@@ -32,10 +32,10 @@ std::string url_decode(const std::string& encoded)
 		}
 		else output += ch;
 	}
-	/*
+	*/
 	std::string output;
 	for (size_t i(0); i < encoded.length(); ++i) {
-		if (encoded[i] == '%') {
+		if (encoded[i] == '%' && i+2 < encoded.length()) {
 			std::stringstream ss;
 			ss << std::hex << encoded.substr(++i, 2);
 			++i;
@@ -45,8 +45,6 @@ std::string url_decode(const std::string& encoded)
 		}
 		else output.push_back(encoded[i]);
 	}
-	*/
-
 	return output;
 }
 
@@ -60,12 +58,13 @@ std::string url_encode(const std::string& decoded)
 		// Keep alphanumeric and other accepted characters intact
 		if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || c == ':' || c == '/') {
 			escaped << c;
-			continue;
 		}
 		// Any other characters are percent-encoded
-		escaped << std::uppercase;
-		escaped << '%' << std::setw(2) << int((unsigned char)c);
-		escaped << std::nouppercase;
+		else {
+			escaped << std::uppercase;
+			escaped << '%' << std::setw(2) << int((unsigned char)c);
+			escaped << std::nouppercase;
+		}
 	}
 	return escaped.str();
 }
