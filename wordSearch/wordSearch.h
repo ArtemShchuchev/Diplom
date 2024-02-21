@@ -2,10 +2,10 @@
 
 #include <iostream>
 #include <regex>
+#include <mutex>
 #include <boost/locale.hpp> // перед "SecondaryFunction.h"
 #include "SecondaryFunction.h"
 #include "../Types.h"
-#include "UrlEncodeDecode.h"
 
 using Link = struct {
 	std::string link_str;
@@ -13,19 +13,8 @@ using Link = struct {
 };
 using LinkList = std::list<Link>;
 
-
-class WordSearch
+namespace WordSearch
 {
-private:
-	static const std::wregex
-		space_reg,
-		body_reg,
-		url_reg,
-		title_reg,
-		token_reg,
-		punct_reg,
-		number_reg;
-
-public:
-	std::pair<WordMap, LinkList> getWordLink(std::wstring page, unsigned int recLevel);
+	std::pair<WordMap, LinkList> getWordLink(
+		std::wstring page, unsigned int recLevel, std::mutex& m);
 };
