@@ -199,8 +199,8 @@ static std::wstring do_request(std::string urlStr)
     catch (const std::exception& err)
     {
         consoleCol(col::br_red);
-        std::wcerr << L"\nИсключение типа: " << typeid(err).name() << '\n';
-        std::wcerr << L"Ссылка: " << urlStr << '\n';
+        std::wcerr << L"\nИсключение типа: " << typeid(err).name() << L'\n';
+        std::wcerr << L"Ссылка: " << utf82wideUtf(urlStr) << L'\n';
         std::wcerr << L"Ошибка: " << utf82wideUtf(err.what()) << std::endl;
         consoleCol(col::cancel);
     }
