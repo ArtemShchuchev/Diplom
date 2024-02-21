@@ -16,6 +16,29 @@ void consoleCol(COLOR color)
 #endif
 }
 
+// получение текущего положения курсора
+COORD getConsolePos()
+{
+	HANDLE hConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO cbsi;
+	if (GetConsoleScreenBufferInfo(hConsoleOutput, &cbsi))
+	{
+		return cbsi.dwCursorPosition;
+	}
+	else
+	{
+		// The function failed. Call GetLastError() for details.
+		COORD invalid = { 0, 0 };
+		return invalid;
+	}
+}
+
+// установка положения курсора
+void setConsolePos(const COORD coord)
+{
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+}
+
 void setRuLocale()
 {
 	setlocale(LC_ALL, "ru_RU.utf8");

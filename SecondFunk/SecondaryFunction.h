@@ -69,6 +69,12 @@ namespace col
 // цвет в консоли
 void consoleCol(COLOR);
 
+// получение текущего положения курсора
+COORD getConsolePos();
+
+// установка положения курсора
+void setConsolePos(const COORD);
+
 void setRuLocale();
 
 void consoleClear();
