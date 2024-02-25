@@ -2,7 +2,7 @@
 
 const std::wregex
     title_reg{ LR"(<title>(.+)< ?/ ?tit)" },
-    url_reg{ LR"!!(<a href="(ht[^"]+)")!!" },
+    url_reg{ LR"!!(<a href="([^"]+)")!!" },
     token_reg{ LR"(<[^>]*>)" },
     word_reg{ LR"([^[:alpha:]]?([[:alpha:]]+)[^[:alpha:]]?)" };
 

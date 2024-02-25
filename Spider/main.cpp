@@ -87,7 +87,8 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
             consoleCol(col::blue);
             std::wcout << L"Уже есть, пропускаю: " << utf82wideUtf(url_str) << L'\n';
             consoleCol(col::cancel);
-            return; // url уже есть в базе
+            ul_console.unlock();
+            //return; // url уже есть в базе
         }
 
         // Загрузка очередной странички
@@ -100,7 +101,21 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
                 
             // добавление задач в очередь
             if (links.empty() == false) {
-                for (const auto& link : links) {
+                for (auto& link : links) {
+                    if (link.link_str[0] == '/') {
+                        // Парсинг строки ссылки
+                        boost::url urlParse = boost::urls::parse_uri(url.link_str).value();
+
+                        std::string rootLink = urlParse.scheme();
+                        if (link.link_str[1] == '/') rootLink += ":";
+                        else {
+                            rootLink += "://";
+                            rootLink += urlParse.host();
+                        }
+
+                        link.link_str = rootLink + link.link_str;
+                    }
+                    else if (link.link_str.find("http") != 0) continue;
                     threadPool.add([link, lock, &threadPool, &conData]
                         { spiderTask(link, lock, threadPool, conData); });
                 }
@@ -130,7 +145,7 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
     }
     catch (pqxx::broken_connection& err)
     {
-        std::wstring err_str(L"Ошибка подключения к PostgreSQL: "
+        std::wstring err_str(L"Ошибка pqxx::broken_connection!\n"
             + ansi2wideUtf(err.what()));
 
         std::rethrow_exception(
@@ -154,7 +169,5 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
         std::wcerr << L"Ссылка: " << utf82wideUtf(url_str) << L'\n';
         std::wcerr << L"Ошибка: " << utf82wideUtf(err.what()) << std::endl;
         consoleCol(col::cancel);
-
-        //std::rethrow_exception(std::current_exception());
     }
 }
