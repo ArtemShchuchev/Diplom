@@ -156,7 +156,7 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
     {
         ul_console.lock();
         consoleCol(col::br_red);
-        std::wcerr << L"\nИсключение типа: " << typeid(err).name() << '\n';
+        std::wcerr << L"Исключение типа: " << typeid(err).name() << '\n';
         std::wcerr << L"Ссылка: " << utf82wideUtf(url_str) << '\n';
         std::wcerr << L"Ошибка: " << utf82wideUtf(err.what()) << std::endl;
         consoleCol(col::cancel);
@@ -165,7 +165,7 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
     {
         ul_console.lock();
         consoleCol(col::br_red);
-        std::wcerr << L"\nИсключение типа: " << typeid(err).name() << L'\n';
+        std::wcerr << L"Исключение типа: " << typeid(err).name() << L'\n';
         std::wcerr << L"Ссылка: " << utf82wideUtf(url_str) << L'\n';
         std::wcerr << L"Ошибка: " << utf82wideUtf(err.what()) << std::endl;
         consoleCol(col::cancel);
