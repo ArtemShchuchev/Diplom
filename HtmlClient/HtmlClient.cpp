@@ -2,7 +2,7 @@
 
 // io_context требуется для всех операций ввода-вывода.
 net::io_context ioc;
-static std::wstring do_request(std::string urlStr);
+static std::wstring do_request(const std::string urlStr);
 
 
 static std::wstring checkResult(http::response<http::dynamic_body> res)
@@ -29,9 +29,7 @@ static std::wstring checkResult(http::response<http::dynamic_body> res)
             break;
         }
         default:
-            ////////////////////////////////////////////
-            //std::wcout << L"Unexpected HTTP status " << responseCode << "\n\n";
-            ////////////////////////////////////////////
+            throw std::runtime_error("Unexpected HTTP status " + std::to_string(responseCode));
             break;
     }
 
@@ -138,23 +136,14 @@ static std::wstring httpRequest(const tcp::resolver::results_type& sequenceEp,
     return checkResult(res);
 }
 
-static std::wstring do_request(std::string urlStr)
+static std::wstring do_request(const std::string urlStr)
 {
     try
     {
         // Парсинг строки ссылки
-        boost::urls::url_view url;
-        bool parseErr(true);
-        do
-        {
-            auto parseResult = boost::urls::parse_uri(urlStr);
-            url = parseResult.value();
-            if (url.path().empty()) {
-                urlStr += '/';
-                parseErr = true;
-            }
-            else parseErr = false;
-        } while (parseErr);
+        boost::url url = boost::urls::parse_uri(urlStr).value();
+        if (url.path().empty())
+            url.set_path("/"); // path: /
         ////////////////////////////////////////////
         //std::wcout << L"----------------\n";
         //std::wcout << L"URL parse... \n";
@@ -193,16 +182,21 @@ static std::wstring do_request(std::string urlStr)
         return std::move(str);
     }
     catch (const boost::detail::with_throw_location<boost::system::system_error>)
-    { /* Ошибка в синтаксисе URL -> игнор. */ }
-    catch (const boost::wrapexcept<boost::system::system_error>)
-    { /* Удаленный сервер, отверг соединение -> игнор. */ }
+    { /* Ошибка в синтаксисе URL -> игнор. */ 
+        std::rethrow_exception(std::current_exception());
+    }
+    catch (const boost::wrapexcept<boost::system::system_error>& err)
+    { /* Удаленный сервер, отверг соединение -> игнор. */
+        std::wstring err_str(L"Ошибка boost::wrapexcept<boost::system::system_error>!\n"
+            + ansi2wideUtf(err.what()));
+
+        std::rethrow_exception(
+            std::make_exception_ptr(
+                std::runtime_error(wideUtf2utf8(err_str))));
+    }
     catch (const std::exception& err)
     {
-        consoleCol(col::br_red);
-        std::wcerr << L"\nИсключение типа: " << typeid(err).name() << L'\n';
-        std::wcerr << L"Ссылка: " << utf82wideUtf(urlStr) << L'\n';
-        std::wcerr << L"Ошибка: " << utf82wideUtf(err.what()) << std::endl;
-        consoleCol(col::cancel);
+        std::rethrow_exception(std::current_exception());
     }
 
     return L"";
