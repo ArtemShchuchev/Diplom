@@ -88,7 +88,7 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
             std::wcout << L"Уже есть, пропускаю: " << utf82wideUtf(url_str) << L'\n';
             consoleCol(col::cancel);
             ul_console.unlock();
-            //return; // url уже есть в базе
+            return; // url уже есть в базе
         }
 
         // Загрузка очередной странички
