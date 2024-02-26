@@ -92,7 +92,34 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
         }
 
         // Загрузка очередной странички
-        std::wstring page = HtmlClient::getRequest(url.link_str); // url -> page
+        std::wstring page;
+        auto[errCode, message] = HtmlClient::getRequest(url.link_str); // url -> page
+        switch (errCode)
+        {
+        case 200:// all ok
+            page = std::move(message);
+            break;
+
+        case 301:
+        {
+            Link link;
+            link.recLevel = url.recLevel;
+            link.link_str = wideUtf2utf8(message);
+            threadPool.add([link, lock, &threadPool, &conData]
+                { spiderTask(link, lock, threadPool, conData); });
+            break;
+        }
+
+        case 1:
+        default:
+            ul_console.lock();
+            consoleCol(col::br_yellow);
+            std::wcout << utf82wideUtf(url_str) << L'\n';
+            std::wcout << message << L'\n';
+            consoleCol(col::cancel);
+            ul_console.unlock();
+            break;
+        }
 
         // Поиск слов/ссылок на страничке
         if (page.empty() == false) {

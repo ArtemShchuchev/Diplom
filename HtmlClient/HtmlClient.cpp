@@ -2,14 +2,14 @@
 
 // io_context требуется для всех операций ввода-вывода.
 net::io_context ioc;
-static std::wstring do_request(const std::string urlStr);
+static Message do_request(const std::string urlStr);
 
 
-static std::wstring checkResult(http::response<http::dynamic_body> res)
+static Message checkResult(http::response<http::dynamic_body> res)
 {
-    std::wstring ws;
-    unsigned int responseCode(res.base().result_int());
-    switch (responseCode)
+    std::wstring answer;
+    unsigned int errCode = res.base().result_int();
+    switch (errCode)
     {
         case 301:
         {
@@ -17,7 +17,8 @@ static std::wstring checkResult(http::response<http::dynamic_body> res)
             ////////////////////////////////////////////
             //std::wcout << responseCode << L": Перенаправлено: " << ansi2wideUtf(url) << "\n\n";
             ////////////////////////////////////////////
-            ws = do_request(url);
+            //do_request(url);
+            answer = utf82wideUtf(url);
             break;
         }
         case 200:
@@ -25,18 +26,19 @@ static std::wstring checkResult(http::response<http::dynamic_body> res)
             std::stringstream ss;
             ss << res;
             std::string s(ss.str());
-            ws = utf82wideUtf(s);
+            answer = utf82wideUtf(s);
             break;
         }
         default:
-            throw std::runtime_error("Unexpected HTTP status " + std::to_string(responseCode));
+            //throw std::runtime_error("Unexpected HTTP status " + std::to_string(errCode));
+            answer = L"Unexpected HTTP status " + std::to_wstring(errCode);
             break;
     }
 
-    return ws;
+    return { errCode, answer };
 }
 
-static std::wstring httpsRequest(const tcp::resolver::results_type& sequenceEp,
+static Message httpsRequest(const tcp::resolver::results_type& sequenceEp,
     const http::request<http::string_body>& req)
 {
     ssl::context ctx(ssl::context::sslv23);
@@ -92,7 +94,7 @@ static std::wstring httpsRequest(const tcp::resolver::results_type& sequenceEp,
     return checkResult(res);
 }
 
-static std::wstring httpRequest(const tcp::resolver::results_type& sequenceEp,
+static Message httpRequest(const tcp::resolver::results_type& sequenceEp,
     const http::request<http::string_body>& req)
 {
     beast::tcp_stream stream{ ioc };
@@ -136,8 +138,9 @@ static std::wstring httpRequest(const tcp::resolver::results_type& sequenceEp,
     return checkResult(res);
 }
 
-static std::wstring do_request(const std::string urlStr)
+Message do_request(const std::string urlStr)
 {
+    Message mes{ 0, L""};
     try
     {
         // Парсинг строки ссылки
@@ -175,35 +178,44 @@ static std::wstring do_request(const std::string urlStr)
         //ss << request;
         //std::wcout << L"\nRequest: " << utf82wideUtf(ss.str());
         ////////////////////////////////////////////
-        std::wstring str = (port == 443) ?
-            httpsRequest(sequenceEp, request) :
-            httpRequest(sequenceEp, request);
-
-        return std::move(str);
+        mes = (port == 443) ? httpsRequest(sequenceEp, request)
+            : httpRequest(sequenceEp, request);
     }
-    catch (const boost::detail::with_throw_location<boost::system::system_error>)
+    catch (const boost::detail::with_throw_location<boost::system::system_error>& err)
     { /* Ошибка в синтаксисе URL -> игнор. */ 
-        std::rethrow_exception(std::current_exception());
+        //std::rethrow_exception(std::current_exception());
+        std::wstring answer = L"Исключение типа: " + utf82wideUtf(typeid(err).name())
+            + L"\nОшибка: " + utf82wideUtf(err.what());
+        mes = { 1, answer };
     }
     catch (const boost::wrapexcept<boost::system::system_error>& err)
     { /* Удаленный сервер, отверг соединение -> игнор. */
+        /*
         std::wstring err_str(L"Ошибка boost::wrapexcept<boost::system::system_error>!\n"
             + ansi2wideUtf(err.what()));
 
         std::rethrow_exception(
             std::make_exception_ptr(
                 std::runtime_error(wideUtf2utf8(err_str))));
+
+        */
+        std::wstring answer = L"Исключение типа: " + utf82wideUtf(typeid(err).name())
+            + L"\nОшибка: " + ansi2wideUtf(err.what());
+        mes = { 1, answer };
     }
     catch (const std::exception& err)
     {
-        std::rethrow_exception(std::current_exception());
+        //std::rethrow_exception(std::current_exception());
+        std::wstring answer = L"Исключение типа: " + utf82wideUtf(typeid(err).name())
+            + L"\nОшибка: " + utf82wideUtf(err.what());
+        mes = { 1, answer };
     }
-
-    return L"";
+    
+    return mes;
 }
 
 
-std::wstring HtmlClient::getRequest(const std::string& urlStr)
+Message HtmlClient::getRequest(const std::string& urlStr)
 {
     return do_request(urlStr);
 }

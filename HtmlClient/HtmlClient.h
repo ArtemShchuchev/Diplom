@@ -13,8 +13,9 @@ namespace net = boost::asio;        // from <boost/asio.hpp>
 namespace ssl = net::ssl;
 using tcp = net::ip::tcp;           // from <boost/asio/ip/tcp.hpp>
 
+using Message = std::pair<unsigned int, std::wstring>;
 
 namespace HtmlClient
 {
-	std::wstring getRequest(const std::string& urlStr);
+	Message getRequest(const std::string& urlStr);
 };
