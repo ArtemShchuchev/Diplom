@@ -11,14 +11,35 @@
 
 struct Lock {
     std::mutex console;
-    std::mutex parse;
     std::mutex db;
 };
 auto lock = std::make_shared<Lock>();
 auto const HARD_CONCUR(std::thread::hardware_concurrency());
 Thread_pool threadPool(HARD_CONCUR);
+class CacheLink {
+private:
+    std::mutex m;
+    // несортированное множиство в качестве кэша ссылок
+    std::unordered_set<std::string> links;
+
+public:
+    void set(std::unordered_set<std::string>& link) {
+        links.swap(link);
+    }
+    bool addLink(const std::string& link) {
+        std::lock_guard<std::mutex> lg(m);
+        auto result = links.insert(link);
+        // true -> url внесен в кэш
+        return result.second;
+    }
+    void deleteLink(const std::string& link) {
+        std::lock_guard<std::mutex> lg(m);
+        links.erase(link);
+    }
+}cachelink;
+
 static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
-    Thread_pool& threadPool, ConnectData& conData);
+    Thread_pool& threadPool, std::shared_ptr<Clientdb> db_ptr);
 
 int main(int argc, char** argv)
 {
@@ -43,17 +64,39 @@ int main(int argc, char** argv)
         connectDb.username = config.getConfig<std::string>("BdConnect", "user");
         connectDb.port = config.getConfig<unsigned>("BdConnect", "port");
 
-        spiderTask(url, lock, threadPool, connectDb);
+        // наполняю кэш ссылками из БД
+        auto db_ptr = std::make_shared<Clientdb>(connectDb);
+        cachelink.set(db_ptr->getLinks());
+
+        spiderTask(url, lock, threadPool, db_ptr);
         // таймаут каждого потока, после чего он считается "зависшим"
         threadPool.setTimeout(std::chrono::seconds(60));
         threadPool.wait();
+    }
+    catch (const pqxx::broken_connection& err)
+    {
+        std::lock_guard<std::mutex> lg(lock->console);
+        consoleCol(col::br_red);
+        std::wcerr << L"\nИсключение типа: " << typeid(err).name() << '\n';
+        std::wcerr << ansi2wideUtf(err.what()) << std::endl;
+        consoleCol(col::cancel);
+        return EXIT_FAILURE;
+    }
+    catch (const pqxx::sql_error& err)
+    {
+        std::lock_guard<std::mutex> lg(lock->console);
+        consoleCol(col::br_red);
+        std::wcerr << L"\nИсключение типа: " << typeid(err).name() << '\n';
+        std::wcerr << utf82wideUtf(err.what()) << std::endl;
+        consoleCol(col::cancel);
+        return EXIT_FAILURE;
     }
     catch (const std::exception& err)
     {
         std::lock_guard<std::mutex> lg(lock->console);
         consoleCol(col::br_red);
         std::wcerr << L"\nИсключение типа: " << typeid(err).name() << '\n';
-        std::wcerr << utf82wideUtf(err.what()) << '\n';
+        std::wcerr << utf82wideUtf(err.what()) << std::endl;
         consoleCol(col::cancel);
         return EXIT_FAILURE;
     }
@@ -63,7 +106,7 @@ int main(int argc, char** argv)
 
 
 static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
-    Thread_pool& threadPool, ConnectData& conData)
+    Thread_pool& threadPool, std::shared_ptr<Clientdb> db_ptr)
 {
     std::string url_str;
     std::unique_lock<std::mutex> ul_console(lock->console, std::defer_lock);
@@ -72,23 +115,14 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
     {
         url_str = url_decode(url.link_str);
 
-        // проверяю наличие ссылки в БД
-        std::unique_lock<std::mutex> ul_db(lock->db);
-        auto db_ptr = std::make_unique<Clientdb>(conData);
-        int idLink = db_ptr->getIdLink(url_str);
-
-        if (idLink == 0) {
-            idLink = db_ptr->addLink(url_str);
-            ul_db.unlock();
-        }
-        else {
-            ul_db.unlock();
+        // проверяю наличие ссылки в кэше БД
+        if (!cachelink.addLink(url_str)) { // url уже есть в базе
             ul_console.lock();
             consoleCol(col::blue);
-            std::wcout << L"Уже есть, пропускаю: " << utf82wideUtf(url_str) << L'\n';
+            std::wcout << L"Уже есть, пропускаю: " << utf82wideUtf(url_str) << std::endl;
             consoleCol(col::cancel);
             ul_console.unlock();
-            return; // url уже есть в базе
+            return;
         }
 
         // Загрузка очередной странички
@@ -105,8 +139,8 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
             Link link;
             link.recLevel = url.recLevel;
             link.link_str = wideUtf2utf8(message);
-            threadPool.add([link, lock, &threadPool, &conData]
-                { spiderTask(link, lock, threadPool, conData); });
+            threadPool.add([link, lock, &threadPool, db_ptr]
+                { spiderTask(link, lock, threadPool, db_ptr); });
             break;
         }
 
@@ -115,7 +149,7 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
             ul_console.lock();
             consoleCol(col::br_yellow);
             std::wcout << utf82wideUtf(url_str) << L'\n';
-            std::wcout << message << L'\n';
+            std::wcout << message << std::endl;
             consoleCol(col::cancel);
             ul_console.unlock();
             break;
@@ -124,7 +158,7 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
         // Поиск слов/ссылок на страничке
         if (page.empty() == false) {
             // page, recurse -> word, amount, listLink
-            auto [words, links](WordSearch::getWordLink(std::move(page), url.recLevel, lock->parse));
+            auto [words, links](WordSearch::getWordLink(std::move(page), url.recLevel));
                 
             // добавление задач в очередь
             if (links.empty() == false) {
@@ -143,8 +177,8 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
                         link.link_str = rootLink + link.link_str;
                     }
                     else if (link.link_str.find("http") != 0) continue;
-                    threadPool.add([link, lock, &threadPool, &conData]
-                        { spiderTask(link, lock, threadPool, conData); });
+                    threadPool.add([link, lock, &threadPool, db_ptr]
+                        { spiderTask(link, lock, threadPool, db_ptr); });
                 }
             }
 
@@ -152,25 +186,31 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
             std::wstring message_str(L"(" + std::to_wstring(url.recLevel) + L")(url:");
             message_str += std::to_wstring(links.size()) + L")(word:";
             message_str += std::to_wstring(words.size()) + L") ";
-            message_str += utf82wideUtf(url_str) + L'\n';
+            message_str += utf82wideUtf(url_str);
             ul_console.lock();
-            std::wcout << message_str;
+            std::wcout << message_str << std::endl;;
             ul_console.unlock();
 
             // Сохранение найденных слов/ссылок в БД
             if (words.empty() == false) {
-                ul_db.lock();
+                std::unique_lock<std::mutex> ul_db(lock->db);
+                int idLink = db_ptr->addLink(url_str);
                 idWordAm_vec idWordAm(db_ptr->addWords(std::move(words)));
                 db_ptr->addLinkWords(idLink, idWordAm);
+                ul_db.unlock();
                 return; // Работа проделана - выходим
             }
         }
 
         // что то пошло не так -> пустая ссылка не нужна
-        ul_db.lock();
-        db_ptr->deleteLink(idLink);
+        cachelink.deleteLink(url_str);
     }
-    catch (pqxx::broken_connection& err)
+    catch (const pqxx::protocol_violation&)
+    {
+        std::rethrow_exception(std::current_exception());
+
+    }
+    catch (const pqxx::broken_connection& err)
     {
         std::wstring err_str(L"Ошибка pqxx::broken_connection!\n"
             + ansi2wideUtf(err.what()));
@@ -178,15 +218,6 @@ static void spiderTask(const Link url, std::shared_ptr<Lock> lock,
         std::rethrow_exception(
             std::make_exception_ptr(
                 std::runtime_error(wideUtf2utf8(err_str))));
-    }
-    catch (const pqxx::data_exception& err)
-    {
-        ul_console.lock();
-        consoleCol(col::br_red);
-        std::wcerr << L"Исключение типа: " << typeid(err).name() << '\n';
-        std::wcerr << L"Ссылка: " << utf82wideUtf(url_str) << '\n';
-        std::wcerr << L"Ошибка: " << utf82wideUtf(err.what()) << std::endl;
-        consoleCol(col::cancel);
     }
     catch (const std::exception& err)
     {
