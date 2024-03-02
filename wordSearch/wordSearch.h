@@ -16,5 +16,5 @@ using LinkList = std::list<Link>;
 namespace WordSearch
 {
 	std::pair<WordMap, LinkList> getWordLink(
-		std::wstring page, unsigned int recLevel, std::mutex& m);
+		std::wstring page, unsigned int recLevel);
 };

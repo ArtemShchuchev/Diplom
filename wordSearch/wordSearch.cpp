@@ -7,9 +7,11 @@ const std::wregex
     word_reg{ LR"([^[:alpha:]]?([[:alpha:]]+)[^[:alpha:]]?)" };
 
 std::pair<WordMap, LinkList> WordSearch::getWordLink(
-    std::wstring page, unsigned int recLevel, std::mutex& m)
+    std::wstring page, unsigned int recLevel)
 {
+    static std::mutex wregexLock;
     LinkList links;
+
     // Строку в нижний регистр
     // Create system default locale
     boost::locale::generator gen;
@@ -20,7 +22,7 @@ std::pair<WordMap, LinkList> WordSearch::getWordLink(
 
     // Ищу title
     std::wstring title;
-    std::unique_lock<std::mutex> ul_parse(m);
+    std::unique_lock<std::mutex> ul_parse(wregexLock);
     auto itTitle = std::wsregex_token_iterator(page.begin(), page.end(), title_reg, 1);
     if (itTitle != std::wsregex_token_iterator{}) title = *itTitle;
     ul_parse.unlock();
