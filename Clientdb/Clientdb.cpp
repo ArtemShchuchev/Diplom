@@ -11,6 +11,33 @@ Clientdb::Clientdb(const ConnectData& data)
 	
 	if (!is_open()) throw std::runtime_error("Не удалось подключиться к БД");
 	createTable();
+
+	const std::string SQL_GET_ID_WORDS{
+		"select id from words "
+		"where word = $1;" };
+	connect->prepare("get_id", SQL_GET_ID_WORDS);
+
+	const std::string SQL_GET_LINK_AMOUNT{
+		"SELECT l.link, lw.amount FROM link_word lw "
+		"JOIN links l ON l.id = lw.link_id "
+		"JOIN words w ON w.id = lw.word_id "
+		"WHERE w.word = $1;" };
+	connect->prepare("get_link_amount", SQL_GET_LINK_AMOUNT);
+
+
+	const std::string SQL_GET_LINKS{
+		"select link from links; " };
+	connect->prepare("get_link", SQL_GET_LINKS);
+
+	const std::string SQL_ADD_WORDS{
+		"INSERT into words (word) "
+		"VALUES($1) on conflict (word) do nothing returning id;" };
+	connect->prepare("insert_words", SQL_ADD_WORDS);
+
+	const std::string SQL_ADD_LINK_WORDS{
+		"INSERT into link_word (link_id, word_id, amount) "
+		"VALUES($1, $2, $3);" };
+	connect->prepare("insert_link_word", SQL_ADD_LINK_WORDS);
 }
 
 bool Clientdb::is_open()
@@ -18,66 +45,58 @@ bool Clientdb::is_open()
 	return connect->is_open();
 }
 
-void Clientdb::deleteLink(const int id)
+void Clientdb::deleteLink(const int linkId)
 {
-	const std::string DEL_START_STR{
+	const std::string SQL_DELETE_LINK{
 		"delete from links "
-		"where id = '" };
-	const std::string DEL_END_STR{ "';" };
+		"where id = $1;" };
 
 	pqxx::work tx{ *connect };
-	tx.exec(DEL_START_STR + std::to_string(id) + DEL_END_STR);
+	tx.exec_params(SQL_DELETE_LINK, std::to_string(linkId));
 	tx.commit();
 }
 
 void Clientdb::delFromLinkWords(const int linkId)
 {
-	const std::string DEL_START_STR{
+	const std::string SQL_DEL_FROM_LINK_WORDS{
 		"delete from link_word "
-		"where link_id = '" };
-	const std::string DEL_END_STR{ "';" };
+		"where link_id = $1;" };
 
 	pqxx::work tx{ *connect };
-	tx.exec(DEL_START_STR + std::to_string(linkId) + DEL_END_STR);
+	tx.exec_params(SQL_DEL_FROM_LINK_WORDS, std::to_string(linkId));
 	tx.commit();
 }
 
 void Clientdb::deleteNotUseWord()
 {
-	const std::string DEL_STR{
+	const std::string SQL_DEL_NOT_USE_WORD{
 		"delete from words "
 		"where id <> all(select distinct word_id from link_word);" };
 
 	pqxx::work tx{ *connect };
-	tx.exec(DEL_STR);
+	tx.exec(SQL_DEL_NOT_USE_WORD);
 	tx.commit();
 }
 
 int Clientdb::createLink(const std::string& link)
 {
-	const std::string CREATE_START_STR{
+	const std::string SQL_CREATE_LINK{
 		"INSERT into links (link) "
-		"VALUES('" };
-	const std::string CREATE_END_STR{ "') returning id;" };
+		"VALUES($1) on conflict (link) do nothing returning id;" };
 
 	pqxx::work tx{ *connect };
-	auto row = tx.exec1(CREATE_START_STR + tx.esc(link) + CREATE_END_STR);
+	auto row = tx.exec_params(SQL_CREATE_LINK, tx.esc(link));
 	tx.commit();
+	
+	auto id_opt = row[0][0].as<std::optional<int>>();
 
-	return row[0].as<int>();
+	return id_opt.has_value() ? *id_opt : 0;
 }
 
 void Clientdb::getIdWord(idWordAm_vec& idWordAm)
 {
-	const std::string SQL_REQUEST{
-		"select id from words "
-		"where word = $1;" };
-
-	connect->prepare("get_id", SQL_REQUEST);
-
 	pqxx::work tx{ *connect };
-	for (auto& struc : idWordAm)
-	{
+	for (auto& struc : idWordAm) {
 		if (struc.id) continue;
 		auto row = tx.exec_prepared("get_id", tx.esc(struc.word));
 		auto option = row[0][0].as<std::optional<int>>();
@@ -93,49 +112,35 @@ std::wstring Clientdb::dbname()
 
 int Clientdb::addLink(const std::string& link)
 {
-	/*
-	int id = getIdLink(link);
-	if (id)
-	{
-		deleteLink(id);
-		deleteNotUseWord();
+	int id(createLink(link));
+	if (id == 0) {	// ссылка уже существует в БД
+		id = getIdLink(link);
+		delFromLinkWords(id);
 	}
-	return createLink(link);
-	*/
-	int id = getIdLink(link);
-	if (id == 0) id = createLink(link);
-	else delFromLinkWords(id);
 	return id;
 }
 
 int Clientdb::getIdLink(const std::string& link)
 {
-	const std::string SEL_START_STR{
+	const std::string SQL_GET_ID_LINK{
 		"select id from links "
-		"where link = '" };
-	const std::string SEL_END_STR{ "';" };
+		"where link = $1;" };
 
 	pqxx::work tx{ *connect };
-	auto row = tx.exec(SEL_START_STR + tx.esc(link) + SEL_END_STR);
+	auto row = tx.exec_params(SQL_GET_ID_LINK, tx.esc(link));
 	tx.commit();
 
 	auto id_opt = row[0][0].as<std::optional<int>>();
-	int id = id_opt.has_value() ? *id_opt : 0;
 
-	return id;
+	return id_opt.has_value() ? *id_opt : 0;
 }
 
 idWordAm_vec Clientdb::addWords(const WordMap wordAmount)
 {
-	const std::string SQL_REQUEST{
-		"INSERT into words (word) "
-		"VALUES($1) on conflict (word) do nothing returning id;" };
 	bool wordExist(false);
-
-	connect->prepare("insert_words", SQL_REQUEST);
-
 	idWordAm_vec idWordAm(wordAmount.size());
 	auto it = idWordAm.begin();
+
 	pqxx::work tx{ *connect };
 	for (auto& [w, amount] : wordAmount)
 	{
@@ -156,15 +161,8 @@ idWordAm_vec Clientdb::addWords(const WordMap wordAmount)
 
 void Clientdb::addLinkWords(const int id, const idWordAm_vec& idWordAm)
 {
-	const std::string SQL_REQUEST{
-		"INSERT into link_word (link_id, word_id, amount) "
-		"VALUES($1, $2, $3);" };
-
-	connect->prepare("insert_link_word", SQL_REQUEST);
-
 	pqxx::work tx{ *connect };
-	for (auto& struc : idWordAm)
-	{
+	for (auto& struc : idWordAm) {
 		tx.exec_prepared("insert_link_word", id, struc.id, struc.amount);
 	}
 	tx.commit();
@@ -173,15 +171,8 @@ void Clientdb::addLinkWords(const int id, const idWordAm_vec& idWordAm)
 std::unordered_map<std::string, unsigned> Clientdb::getLinkAmount(
 	const std::vector<std::string>& words)
 {
-	const std::string SQL_REQUEST{
-		"SELECT l.link, lw.amount FROM link_word lw "
-		"JOIN links l ON l.id = lw.link_id "
-		"JOIN words w ON w.id = lw.word_id "
-		"WHERE w.word = $1;" };
-
-	connect->prepare("get_link_amount", SQL_REQUEST);
-
 	std::unordered_map<std::string, unsigned> LinkAmount;
+
 	pqxx::work tx{ *connect };
 	for (auto& w : words)
 	{
@@ -200,6 +191,26 @@ std::unordered_map<std::string, unsigned> Clientdb::getLinkAmount(
 	tx.commit();
 
 	return LinkAmount;
+}
+
+std::unordered_set<std::string> Clientdb::getLinks()
+{
+	std::unordered_set<std::string> links;
+	pqxx::work tx{ *connect };
+
+	auto row = tx.exec_prepared("get_link");
+
+	for (const auto& next : row) {
+		auto optionLink = next[0].as<std::optional<std::string>>();
+
+		if (optionLink.has_value()) {
+			links.insert(*optionLink);
+		}
+	}
+
+	tx.commit();
+
+	return links;
 }
 
 void Clientdb::createTable()
