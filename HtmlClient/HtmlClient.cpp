@@ -1,10 +1,5 @@
 ﻿#include "HtmlClient.h"
 
-// io_context требуется для всех операций ввода-вывода.
-net::io_context ioc;
-static Message do_request(const std::string urlStr);
-
-
 static Message checkResult(http::response<http::dynamic_body> res)
 {
     std::wstring answer;
@@ -39,7 +34,7 @@ static Message checkResult(http::response<http::dynamic_body> res)
 }
 
 static Message httpsRequest(const tcp::resolver::results_type& sequenceEp,
-    const http::request<http::string_body>& req)
+    const http::request<http::string_body>& req, net::io_context& ioc)
 {
     ssl::context ctx(ssl::context::sslv23);
     ctx.set_default_verify_paths();
@@ -95,7 +90,7 @@ static Message httpsRequest(const tcp::resolver::results_type& sequenceEp,
 }
 
 static Message httpRequest(const tcp::resolver::results_type& sequenceEp,
-    const http::request<http::string_body>& req)
+    const http::request<http::string_body>& req, net::io_context& ioc)
 {
     beast::tcp_stream stream{ ioc };
     // Установите соединение по IP-адресу
@@ -138,7 +133,7 @@ static Message httpRequest(const tcp::resolver::results_type& sequenceEp,
     return checkResult(res);
 }
 
-Message do_request(const std::string urlStr)
+static Message do_request(const std::string urlStr)
 {
     Message mes{ 0, L""};
     try
@@ -155,6 +150,8 @@ Message do_request(const std::string urlStr)
         //std::wcout << L"path:     " << utf82wideUtf(url.path()) << "\n";
         ////////////////////////////////////////////
 
+        // io_context требуется для всех операций ввода-вывода.
+        net::io_context ioc;
         // Список конечных точек
         // host: en.wikipedia.org, scheme: https
         tcp::resolver resolver{ ioc };
@@ -178,8 +175,8 @@ Message do_request(const std::string urlStr)
         //ss << request;
         //std::wcout << L"\nRequest: " << utf82wideUtf(ss.str());
         ////////////////////////////////////////////
-        mes = (port == 443) ? httpsRequest(sequenceEp, request)
-            : httpRequest(sequenceEp, request);
+        mes = (port == 443) ? httpsRequest(sequenceEp, request, ioc)
+            : httpRequest(sequenceEp, request, ioc);
     }
     catch (const boost::detail::with_throw_location<boost::system::system_error>& err)
     { /* Ошибка в синтаксисе URL -> игнор. */ 
