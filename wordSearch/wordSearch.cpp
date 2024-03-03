@@ -1,8 +1,8 @@
 ﻿#include "wordSearch.h"
 
 const std::wregex
-    title_reg{ LR"(<title>(.+)< ?/ ?tit)" },
-    url_reg{ LR"!!(<a href="([^"]+)")!!" },
+    title_reg{ LR"(<title>(.+)< ?/ ?tit)", std::regex::icase },
+    url_reg{ LR"!!(<a href="([^"]+)")!!", std::regex::icase },
     token_reg{ LR"(<[^>]*>)" },
     word_reg{ LR"([^[:alpha:]]?([[:alpha:]]+)[^[:alpha:]]?)" };
 
@@ -11,14 +11,6 @@ std::pair<WordMap, LinkList> WordSearch::getWordLink(
 {
     static std::mutex wregexLock;
     LinkList links;
-
-    // Строку в нижний регистр
-    // Create system default locale
-    boost::locale::generator gen;
-    std::locale loc = gen("");
-    // Make it system global
-    std::locale::global(loc);
-    page = boost::locale::to_lower(page);
 
     // Ищу title
     std::wstring title;
@@ -61,6 +53,14 @@ std::pair<WordMap, LinkList> WordSearch::getWordLink(
     ul_parse.lock();
     page = std::regex_replace(page, token_reg, L" ");
     
+    // Строку в нижний регистр
+    // Create system default locale
+    boost::locale::generator gen;
+    std::locale loc = gen("");
+    // Make it system global
+    std::locale::global(loc);
+    page = boost::locale::to_lower(page);
+
     // Ищу слова
     auto it_start = std::wsregex_token_iterator{ page.begin(), page.end(), word_reg, 1 };
     auto it_end = std::wsregex_token_iterator{};
